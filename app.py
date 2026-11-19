@@ -1,16 +1,20 @@
 
 import streamlit as st
 
-# Importing all four team members' modules
+# ==========================================
+# SMART ELEVATOR CONTROLLER
+# Main Application - Module Integration
+# ==========================================
+
 from modules.validation import validate_command
 from modules.scheduler import RequestScheduler
 from modules.elevator import Elevator
 from modules.diagnostics import diagnose
 
 
-# -----------------------------------------
+# ==========================================
 # PAGE CONFIGURATION
-# -----------------------------------------
+# ==========================================
 
 st.set_page_config(
     page_title="Smart Elevator Controller",
@@ -19,59 +23,201 @@ st.set_page_config(
 )
 
 st.title("🛗 Smart Elevator Controller")
-st.subheader("Theory of Computation Project")
 
-st.write(
-    "An elevator simulation demonstrating Regular Expressions, "
-    "Mealy and Moore Machines, Pushdown Automata and Turing Machines."
+st.caption(
+    "Theory of Computation Project | "
+    "Regular Expressions | Mealy & Moore Machines | "
+    "PDA | Turing Machine"
 )
 
 
-# -----------------------------------------
-# INITIALIZE SESSION STATE
-# -----------------------------------------
+# ==========================================
+# CONSTANTS
+# ==========================================
+
+MIN_FLOOR = 1
+MAX_FLOOR = 10
+
+
+# ==========================================
+# SESSION INITIALIZATION
+# ==========================================
 
 if "elevator" not in st.session_state:
     st.session_state.elevator = Elevator(
         initial_floor=1,
-        min_floor=1,
-        max_floor=10
+        min_floor=MIN_FLOOR,
+        max_floor=MAX_FLOOR
     )
 
 if "scheduler" not in st.session_state:
-    st.session_state.scheduler = RequestScheduler(max_floor=10)
+    st.session_state.scheduler = RequestScheduler(
+        max_floor=MAX_FLOOR
+    )
+
+if "travel_direction" not in st.session_state:
+    st.session_state.travel_direction = "UP"
+
+if "activity_log" not in st.session_state:
+    st.session_state.activity_log = [
+        "Elevator initialized at Floor 1"
+    ]
 
 if "diagnostic_log" not in st.session_state:
     st.session_state.diagnostic_log = ["IDLE"]
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
 
 elevator = st.session_state.elevator
 scheduler = st.session_state.scheduler
 
 
-# -----------------------------------------
-# HELPER FUNCTION
-# -----------------------------------------
+# ==========================================
+# HELPER FUNCTIONS
+# ==========================================
 
-def add_message(message, message_type="info"):
-    st.session_state.messages.append(
-        (message, message_type)
-    )
+def add_activity(message):
+    """Store activity in chronological order."""
+    st.session_state.activity_log.append(message)
 
 
-# -----------------------------------------
+def add_diagnostic_state(state):
+    """Record valid state symbols for the Turing Machine."""
+    st.session_state.diagnostic_log.append(state)
+
+
+def get_scan_next_request():
+    """
+    Direction-based SCAN scheduling.
+
+    The stack remains in scheduler.py for PDA demonstration.
+    The application selects the nearest request in the
+    current direction.
+    """
+
+    pending = scheduler.get_pending_requests()
+
+    if not pending:
+        return None
+
+    current = elevator.current_floor
+    direction = st.session_state.travel_direction
+
+    # If current floor is requested, service it first.
+    if current in pending:
+        return current
+
+    # Moving UP: select the nearest higher floor.
+    if direction == "UP":
+
+        upward_requests = [
+            floor for floor in pending
+            if floor > current
+        ]
+
+        if upward_requests:
+            return min(upward_requests)
+
+        # No requests above: reverse direction.
+        st.session_state.travel_direction = "DOWN"
+
+    # Moving DOWN: select the nearest lower floor.
+    if st.session_state.travel_direction == "DOWN":
+
+        downward_requests = [
+            floor for floor in pending
+            if floor < current
+        ]
+
+        if downward_requests:
+            return max(downward_requests)
+
+        # No requests below: reverse direction.
+        st.session_state.travel_direction = "UP"
+
+    # Retry with the new direction.
+    return get_scan_next_request()
+
+
+def process_next_request():
+    """Process the next request using SCAN scheduling."""
+
+    if elevator.state == "DOOR_OPEN":
+        add_activity(
+            "Cannot move: Close the elevator door first."
+        )
+        return
+
+    target = get_scan_next_request()
+
+    if target is None:
+        add_activity("No pending floor requests.")
+        return
+
+    previous_floor = elevator.current_floor
+
+    # Remove selected request from the original stack.
+    scheduler.cancel_request(target)
+
+    # Determine actual movement direction.
+    if target > previous_floor:
+
+        direction = "UP"
+        add_diagnostic_state("MOVING_UP")
+
+    elif target < previous_floor:
+
+        direction = "DOWN"
+        add_diagnostic_state("MOVING_DOWN")
+
+    else:
+        direction = "NONE"
+
+    # Execute original elevator state-machine logic.
+    journey = elevator.move_to_floor(target)
+
+    # Store events in their actual execution order.
+    for event in journey:
+        add_activity(event)
+
+    # Record arrival as IDLE for compatibility
+    # with the original diagnostics module.
+    if elevator.current_floor == target:
+        add_diagnostic_state("IDLE")
+
+    # Update direction after movement.
+    # Keep direction while there are more requests
+    # in the same direction.
+    remaining = scheduler.get_pending_requests()
+
+    if not remaining:
+        st.session_state.travel_direction = "UP"
+
+    elif direction != "NONE":
+        if direction == "UP":
+            if not any(
+                floor > elevator.current_floor
+                for floor in remaining
+            ):
+                st.session_state.travel_direction = "DOWN"
+
+        elif direction == "DOWN":
+            if not any(
+                floor < elevator.current_floor
+                for floor in remaining
+            ):
+                st.session_state.travel_direction = "UP"
+
+
+# ==========================================
 # ELEVATOR STATUS
-# -----------------------------------------
+# ==========================================
 
 st.divider()
 st.header("1. Elevator Status")
 
-col1, col2, col3 = st.columns(3)
-
 status = elevator.get_status()
+
+col1, col2, col3 = st.columns(3)
 
 with col1:
     st.metric(
@@ -81,7 +227,7 @@ with col1:
 
 with col2:
     st.metric(
-        "Current State",
+        "Elevator State",
         status["state"]
     )
 
@@ -91,22 +237,30 @@ with col3:
         status["direction"]
     )
 
-st.info("Moore Machine Output: " + status["moore_output"])
+st.info(
+    "Moore Machine Output: " + status["moore_output"]
+)
 
 
-# -----------------------------------------
-# USER INPUT AND VALIDATION
-# -----------------------------------------
+# ==========================================
+# COMMAND VALIDATION
+# ==========================================
 
 st.divider()
-st.header("2. Enter Elevator Command")
+st.header("2. Command Input")
 
-st.write("Available commands:")
-st.code("FLOOR:5\nDOOR:OPEN\nDOOR:CLOSE")
+st.write(
+    "Enter a floor request or door operation."
+)
 
-with st.form("command_form"):
+st.code(
+    "FLOOR:5\nDOOR:OPEN\nDOOR:CLOSE"
+)
+
+with st.form("command_form", clear_on_submit=True):
+
     command = st.text_input(
-        "Enter your command",
+        "Enter Command",
         placeholder="Example: FLOOR:5"
     )
 
@@ -118,205 +272,184 @@ with st.form("command_form"):
 if submit:
 
     try:
-        # Member 1: Regular Expression Validation
-        validated_command = validate_command(
+
+        validated = validate_command(
             command,
-            max_floor=10
+            max_floor=MAX_FLOOR
         )
 
-        # Floor request
-        if validated_command.startswith("FLOOR:"):
+        if validated.startswith("FLOOR:"):
 
-            floor = int(validated_command.split(":")[1])
+            floor = int(validated.split(":")[1])
 
-            # Member 3: Stack-based Scheduler
-            # Scheduler independently validates floors 1-10.
+            if floor < MIN_FLOOR:
+                raise ValueError(
+                    "Floor must be between 1 and 10."
+                )
+
             added = scheduler.add_request(floor)
 
             if added:
-                add_message(
-                    f"Floor {floor} request added successfully.",
-                    "success"
-                )
-            else:
-                add_message(
-                    f"Floor {floor} is already in the pending stack.",
-                    "warning"
+
+                add_activity(
+                    f"Floor {floor} request added successfully."
                 )
 
-        # Door opening
-        elif validated_command == "DOOR:OPEN":
+            else:
+
+                add_activity(
+                    f"Floor {floor} is already pending."
+                )
+
+        elif validated == "DOOR:OPEN":
 
             result = elevator.open_door()
-            add_message(result)
+
+            add_activity(result)
 
             if elevator.state == "DOOR_OPEN":
-                st.session_state.diagnostic_log.append(
-                    "DOOR_OPEN"
-                )
+                add_diagnostic_state("DOOR_OPEN")
 
-        # Door closing
-        elif validated_command == "DOOR:CLOSE":
+        elif validated == "DOOR:CLOSE":
 
             result = elevator.close_door()
-            add_message(result)
+
+            add_activity(result)
 
             if elevator.state == "IDLE":
-                st.session_state.diagnostic_log.append(
-                    "IDLE"
-                )
+                add_diagnostic_state("IDLE")
 
     except ValueError as error:
 
-        add_message(
-            str(error),
-            "error"
+        add_activity(
+            f"Validation Error: {error}"
         )
 
 
-# -----------------------------------------
+# ==========================================
 # REQUEST SCHEDULER
-# -----------------------------------------
+# ==========================================
 
 st.divider()
-st.header("3. Request Scheduler (PDA)")
+st.header("3. Floor Request Scheduler")
 
 st.write(
-    "The scheduler uses a stack. "
-    "The latest request is processed first (LIFO)."
+    "PDA Concept: Requests are stored in a stack. "
+    "The application uses direction-based SCAN selection "
+    "to choose which pending request to service."
 )
 
-st.write(
-    "**Pending Floor Requests:**",
-    scheduler.get_pending_requests()
-)
-
-st.write(
-    "**Next Request:**",
-    scheduler.peek_next_request()
-)
+pending = scheduler.get_pending_requests()
 
 col1, col2 = st.columns(2)
 
 with col1:
 
-    if st.button("Process Next Request"):
+    st.write("**Pending Requests:**")
 
-        if elevator.state == "DOOR_OPEN":
+    if pending:
+        st.write(
+            sorted(pending)
+        )
+    else:
+        st.write("No pending requests.")
 
-            add_message(
-                "Close the elevator door before moving.",
-                "error"
-            )
+with col2:
 
-        else:
+    st.write("**Current Travel Direction:**")
 
-            # Member 3: POP operation
-            target_floor = scheduler.get_next_request()
+    st.write(
+    st.session_state.travel_direction
+    if scheduler.get_pending_requests()
+    else "IDLE"
+)
 
-            if target_floor is None:
 
-                add_message(
-                    "No pending floor requests.",
-                    "warning"
-                )
+st.write(
+    "**Next Floor to be Serviced:**",
+    get_scan_next_request()
+)
 
-            else:
 
-                previous_floor = elevator.current_floor
+col1, col2 = st.columns(2)
 
-                # Member 2: Mealy and Moore Machine
-                result = elevator.move_to_floor(
-                    target_floor
-                )
+with col1:
 
-                for event in result:
-                    add_message(event)
+    if st.button(
+        "Process Next Request",
+        use_container_width=True
+    ):
 
-                # Record the movement in the diagnostic tape.
-                # ARRIVED is represented as IDLE here because
-                # the original diagnostics module does not
-                # include ARRIVED in its VALID_STATES.
-
-                if elevator.current_floor != previous_floor:
-
-                    if target_floor > previous_floor:
-                        st.session_state.diagnostic_log.append(
-                            "MOVING_UP"
-                        )
-
-                    else:
-                        st.session_state.diagnostic_log.append(
-                            "MOVING_DOWN"
-                        )
-
-                    st.session_state.diagnostic_log.append(
-                        "IDLE"
-                    )
+        process_next_request()
+        st.rerun()
 
 
 with col2:
 
-    if st.button("Clear All Requests"):
+    if st.button(
+        "Clear All Requests",
+        use_container_width=True
+    ):
 
         scheduler.clear_requests()
 
-        add_message(
-            "All pending requests cleared.",
-            "success"
+        st.session_state.travel_direction = "UP"
+
+        add_activity(
+            "All pending requests cleared."
         )
 
+        st.rerun()
 
-# -----------------------------------------
+
+# ==========================================
 # ACTIVITY LOG
-# -----------------------------------------
+# ==========================================
 
 st.divider()
 st.header("4. Elevator Activity Log")
 
-if st.session_state.messages:
+st.caption(
+    "Events are displayed in chronological order."
+)
 
-    for message, message_type in reversed(
-        st.session_state.messages[-10:]
+if st.session_state.activity_log:
+
+    for index, event in enumerate(
+        st.session_state.activity_log,
+        start=1
     ):
 
-        if message_type == "success":
-            st.success(message)
-
-        elif message_type == "warning":
-            st.warning(message)
-
-        elif message_type == "error":
-            st.error(message)
-
-        else:
-            st.info(message)
+        st.write(f"{index}. {event}")
 
 else:
 
-    st.write("No activity recorded yet.")
+    st.write("No activity recorded.")
 
 
-# -----------------------------------------
+# ==========================================
 # TURING MACHINE DIAGNOSTICS
-# -----------------------------------------
+# ==========================================
 
 st.divider()
-st.header("5. Fault Diagnosis (Turing Machine)")
+st.header("5. Fault Diagnosis - Turing Machine")
 
 st.write(
-    "The diagnostic module scans the session state sequence "
-    "and checks whether the transitions are valid."
+    "The Turing Machine scans the session state tape "
+    "and detects invalid state transitions."
 )
 
-st.write(
-    "**Session State Tape:**",
+st.write("**Session State Tape:**")
+
+st.code(
     " → ".join(st.session_state.diagnostic_log)
 )
 
-if st.button("Run Fault Diagnosis"):
+if st.button(
+    "Run Fault Diagnosis",
+    type="primary"
+):
 
-    # Member 4: Original Turing Machine implementation
     report = diagnose(
         st.session_state.diagnostic_log
     )
@@ -330,7 +463,7 @@ if st.button("Run Fault Diagnosis"):
     else:
 
         st.error(
-            "REJECT: Anomalies detected in the session."
+            "REJECT: Anomalies detected."
         )
 
     st.write(
@@ -356,36 +489,51 @@ if st.button("Run Fault Diagnosis"):
             st.warning(anomaly)
 
 
-# -----------------------------------------
+# ==========================================
 # RAW ELEVATOR EVENT LOG
-# -----------------------------------------
+# ==========================================
 
-with st.expander("View Complete Elevator Event Log"):
+with st.expander(
+    "View Original Elevator Event Log"
+):
 
-    for event in elevator.get_event_log():
-        st.write("•", event)
+    for index, event in enumerate(
+        elevator.get_event_log(),
+        start=1
+    ):
+
+        st.write(f"{index}. {event}")
 
 
-# -----------------------------------------
+# ==========================================
 # RESET SIMULATION
-# -----------------------------------------
+# ==========================================
 
 st.divider()
 
-if st.button("Reset Elevator Simulation"):
+if st.button(
+    "Reset Elevator Simulation",
+    use_container_width=True
+):
 
     st.session_state.elevator = Elevator(
         initial_floor=1,
-        min_floor=1,
-        max_floor=10
+        min_floor=MIN_FLOOR,
+        max_floor=MAX_FLOOR
     )
 
     st.session_state.scheduler = RequestScheduler(
-        max_floor=10
+        max_floor=MAX_FLOOR
     )
 
-    st.session_state.diagnostic_log = ["IDLE"]
-    st.session_state.messages = []
+    st.session_state.travel_direction = "UP"
+
+    st.session_state.activity_log = [
+        "Elevator initialized at Floor 1"
+    ]
+
+    st.session_state.diagnostic_log = [
+        "IDLE"
+    ]
 
     st.rerun()
-
