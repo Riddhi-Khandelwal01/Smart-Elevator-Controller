@@ -1,10 +1,10 @@
-# 🛗 Smart Elevator Controller
+#  Smart Elevator Controller
 
 A Smart Elevator Controller developed as a **Theory of Computation (TOC) Project** using Python and Streamlit.
 
 The project simulates elevator operations and demonstrates the practical applications of four major concepts of Theory of Computation.
 
-## 📌 Project Overview
+##  Project Overview
 
 The Smart Elevator Controller allows users to:
 - Enter and validate elevator commands.
@@ -13,7 +13,7 @@ The Smart Elevator Controller allows users to:
 - Simulate elevator movement and state transitions.
 - Detect invalid state transitions using a fault-diagnosis system.
 
-## 🧠 Theory of Computation Concepts
+##  Theory of Computation Concepts
 
 | TOC Concept | Implementation | Description |
 |---|---|---|
@@ -22,7 +22,7 @@ The Smart Elevator Controller allows users to:
 | Pushdown Automaton (PDA) | `scheduler.py` | Uses a stack to manage pending floor requests. |
 | Turing Machine | `diagnostics.py` | Scans elevator session logs and detects invalid state transitions. |
 
-## 📂 Project Structure
+##  Project Structure
 
 ```text
 Smart-Elevator-Controller/
@@ -41,7 +41,7 @@ Smart-Elevator-Controller/
 └── test_diagnostics.py
 ```
 
-## ⚙️ Technologies Used
+##  Technologies Used
 
 - Python
 - Streamlit
@@ -50,7 +50,7 @@ Smart-Elevator-Controller/
 - Stack-based Scheduling
 - Turing Machine Simulation
 
-## 🚀 Installation and Execution
+##  Installation and Execution
 
 ### 1. Clone the repository
 
@@ -78,7 +78,7 @@ python -m streamlit run app.py
 
 The application will open in your browser.
 
-## 🧪 Testing
+##  Testing
 
 The diagnostic module is tested using valid and invalid elevator state sequences.
 
@@ -110,7 +110,7 @@ The system detects the invalid transition:
 
 `MOVING_UP → MOVING_DOWN`
 
-## 👥 Team Contributions
+##  Team Contributions
 
 | Module | Responsibility | TOC Concept |
 |---|---|---|
@@ -120,7 +120,7 @@ The system detects the invalid transition:
 | `diagnostics.py` | Fault detection and session analysis | Turing Machine |
 | `app.py` | Main application and module integration | Integration |
 
-## 🎯 Project Objective
+##  Project Objective
 
 The primary objective is to demonstrate how theoretical concepts of computation can be applied to a practical simulation system.
 
@@ -129,7 +129,7 @@ The project combines formal language processing, finite-state machines, stack-ba
 ---
 
 Team Members-
-Tanya Agarwal
-Anshul Kumar
-Riddhi Khandelwal
+Tanya Agarwal,
+Anshul Kumar,
+Riddhi Khandelwal,
 Romit Chaudhary
